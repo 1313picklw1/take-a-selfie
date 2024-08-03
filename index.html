@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Capture, Upload, and Send Photo</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            text-align: center;
+            margin: 0;
+            padding: 10px;
+            background: #f4f4f4;
+        }
+        #container {
+            max-width: 100%;
+            margin: 0 auto;
+            padding: 10px;
+            background: #fff;
+            border-radius: 8px;
+            box-shadow: 0 0 10px rgba(0,0,0,0.1);
+        }
+        video {
+            width: 100%;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+        img {
+            display: none;
+            width: 100%;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            margin-top: 10px;
+        }
+        button {
+            display: block;
+            width: 100%;
+            padding: 10px;
+            margin: 5px 0;
+            border: none;
+            border-radius: 4px;
+            background-color: #007bff;
+            color: #fff;
+            font-size: 16px;
+            cursor: pointer;
+        }
+        button:disabled {
+            background-color: #ddd;
+            cursor: not-allowed;
+        }
+        #confirmationMessage {
+            display: none;
+            margin-top: 10px;
+            color: #28a745;
+        }
+    </style>
+</head>
+<body>
+    <div id="container">
+        <h1>Capture and Send Photo</h1>
+        <video id="video" autoplay></video>
+        <button id="captureButton">Capture Photo</button>
+        <canvas id="canvas" style="display: none;"></canvas>
+        <img id="photo" alt="Captured Photo">
+        <button id="sendEmailButton" style="display: none;">Send Photo via Email</button>
+        <div id="emailForm" style="display: none;">
+            <input type="email" id="emailInput" placeholder="Enter your email" required>
+            <button id="submitEmailButton">Send Photo</button>
+        </div>
+        <p id="confirmationMessage" style="display: none;">Photo sent successfully!</p>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
+    <script>
+        // Initialize EmailJS with your public key
+        emailjs.init('pE5B9dW3l25kyPG0K');
+
+        // Cloudinary details
+        const cloudinaryUrl = 'https://api.cloudinary.com/v1_1/dgsaxhagv/image/upload'; // Replace with your Cloudinary cloud name
+        const uploadPreset = 'Preset1'; // Replace with your Cloudinary upload preset
+
+        function capturePhoto() {
+            const video = document.getElementById('video');
+            const canvas = document.getElementById('canvas');
+            const photo = document.getElementById('photo');
+            const context = canvas.getContext('2d');
+
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+            context.drawImage(video, 0, 0, canvas.width, canvas.height);
+            const dataURL = canvas.toDataURL('image/png');
+
+            if (dataURL) {
+                photo.src = dataURL;
+                photo.style.display = 'block';
+                document.getElementById('sendEmailButton').style.display = 'block';
+                document.getElementById('captureButton').style.display = 'none';
+                document.getElementById('emailForm').style.display = 'block';
+            } else {
+                console.error('Failed to get data URL from canvas');
+            }
+        }
+
+        function uploadToCloudinary(file) {
+            if (!file) {
+                console.error('No file provided for upload');
+                return;
+            }
+
+            const formData = new FormData();
+            formData.append('file', file);
+            formData.append('upload_preset', uploadPreset);
+
+            fetch(cloudinaryUrl, {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => response.json())
+            .then(result => {
+                if (result.error) {
+                    console.error('Upload error:', result.error);
+                } else {
+                    console.log('File uploaded to Cloudinary:', result);
+                    sendEmail(result.secure_url); // Pass the Cloudinary URL to the email function
+                }
+            })
+            .catch(error => {
+                console.error('Fetch error:', error);
+            });
+        }
+
+        function sendEmail(photoUrl) {
+            const emailInput = document.getElementById('emailInput').value;
+
+            if (emailInput && photoUrl) {
+                emailjs.send('service_jhjv8km', 'template_8t9hwls', {
+                    to_email: emailInput,
+                    photo_url: photoUrl
+                })
+                .then(response => {
+                    console.log('Email sent successfully:', response);
+                    document.getElementById('confirmationMessage').style.display = 'block';
+                })
+                .catch(error => {
+                    console.error('Error sending email:', error);
+                });
+            } else {
+                alert('Please enter a valid email address and capture a photo.');
+            }
+        }
+
+        function dataURLtoFile(dataURL, filename) {
+            const matches = dataURL.match(/^data:(.+);base64,(.+)$/);
+
+            if (!matches) {
+                console.error('Invalid dataURL format:', dataURL);
+                return null;
+            }
+
+            const mimeString = matches[1];
+            const byteString = atob(matches[2]);
+            const arrayBuffer = new ArrayBuffer(byteString.length);
+            const uint8Array = new Uint8Array(arrayBuffer);
+
+            for (let i = 0; i < byteString.length; i++) {
+                uint8Array[i] = byteString.charCodeAt(i);
+            }
+
+            return new File([arrayBuffer], filename, { type: mimeString });
+        }
+
+        document.addEventListener('DOMContentLoaded', function() {
+            document.getElementById('captureButton').addEventListener('click', function() {
+                capturePhoto();
+            });
+
+            document.getElementById('submitEmailButton').addEventListener('click', function() {
+                const photo = document.getElementById('photo');
+                const file = dataURLtoFile(photo.src, 'photo.png');
+                if (file) {
+                    uploadToCloudinary(file);
+                }
+            });
+
+            navigator.mediaDevices.getUserMedia({ video: true })
+                .then(stream => {
+                    document.getElementById('video').srcObject = stream;
+                })
+                .catch(err => {
+                    console.error('Error accessing camera:', err);
+                    alert('Unable to access camera. Please check your camera settings.');
+                });
+        });
+    </script>
+</body>
+</html>
